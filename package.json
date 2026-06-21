@@ -1,0 +1,59 @@
+{
+  "name": "orchkit",
+  "version": "0.1.0",
+  "description": "A tick-driven engine for orchestrating parallel, autonomous agent runs. Each run renders a verdict; work moves station to station.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Nader Hanna",
+  "keywords": [
+    "agent",
+    "agents",
+    "orchestration",
+    "claude",
+    "claude-code",
+    "ai",
+    "pipeline",
+    "automation"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "orchkit": "./bin/orchkit.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/engine/index.d.ts",
+      "default": "./dist/engine/index.js"
+    },
+    "./claude-code": {
+      "types": "./dist/claude-code/index.d.ts",
+      "default": "./dist/claude-code/index.js"
+    },
+    "./cli": {
+      "types": "./dist/cli/index.d.ts",
+      "default": "./dist/cli/index.js"
+    },
+    "./example": {
+      "types": "./dist/example/index.d.ts",
+      "default": "./dist/example/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}
