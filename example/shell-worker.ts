@@ -7,8 +7,8 @@
 // asking an agent to. The engine's probe still observes liveness the same way.
 
 import { spawn } from "node:child_process";
-import { defineWorker } from "../engine/index.js";
-import type { SignalQueue } from "../engine/index.js";
+import { defineWorker } from "../src/engine/index.js";
+import type { SignalQueue } from "../src/engine/index.js";
 
 export interface ShellWorkerOptions {
   name?: string;

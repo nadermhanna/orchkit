@@ -7,8 +7,8 @@ station to the next.
 orchkit is the engine, not a product. It launches agents, tracks their runs,
 survives restarts, and collects each run's verdict. *What* an agent does, and
 *what happens* on approve or reject, is yours to write. A reference Claude Code
-worker and a zero-dependency shell worker ship as examples so you can see the
-whole contract end to end.
+worker and a zero-dependency shell worker live in [`example/`](./example) so you
+can read the whole contract end to end and copy from it.
 
 ```sh
 npm install orchkit
@@ -51,7 +51,8 @@ import {
   jsonFileDriver,
   fileSignalQueue,
 } from "orchkit";
-import { shellWorker } from "orchkit/example";
+// Reference worker — copy example/shell-worker.ts into your project.
+import { shellWorker } from "./shell-worker.js";
 
 const signals = fileSignalQueue(".orchkit/signals");
 const store = createStoreService(jsonFileDriver(".orchkit/store.json"), {
@@ -92,7 +93,8 @@ import {
   jsonFileDriver,
   fileSignalQueue,
 } from "orchkit";
-import { claudeWorker } from "orchkit/example";
+// Reference worker — copy example/claude-worker.ts into your project.
+import { claudeWorker } from "./claude-worker.js";
 
 const signals = fileSignalQueue(".orchkit/signals");
 const store = createStoreService(jsonFileDriver(".orchkit/store.json"), {
@@ -174,9 +176,11 @@ in your `ingest` — read the run history off the `store` snapshot it's given.
 | `orchkit` | The core: `createOrchestrator`, the store + signal services and their drivers, `defineWorker`, and all types. |
 | `orchkit/claude-code` | The `claudeCodeSpawn` battery. |
 | `orchkit/cli` | `emitVerdict`, `verdictInstruction`, `withVerdict`. |
-| `orchkit/example` | The `shellWorker` and `claudeWorker` reference workers. |
 
-Importing the core pulls in none of the batteries or examples.
+The `shellWorker` and `claudeWorker` reference workers live in
+[`example/`](./example) — read and copy them, they are not a package export.
+
+Importing the core pulls in none of the batteries.
 
 ## Runtime state
 

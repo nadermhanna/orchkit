@@ -6,9 +6,9 @@
 // Requires the `claude` CLI on PATH and `npm i -g orchkit` so the agent can
 // run `orchkit verdict approve|reject`.
 
-import { defineWorker } from "../engine/index.js";
-import { claudeCodeSpawn } from "../claude-code/index.js";
-import { withVerdict } from "../cli/index.js";
+import { defineWorker } from "../src/engine/index.js";
+import { claudeCodeSpawn } from "../src/claude-code/index.js";
+import { withVerdict } from "../src/cli/index.js";
 
 export interface ClaudeWorkerOptions {
   name?: string;
