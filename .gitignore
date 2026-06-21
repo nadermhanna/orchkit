@@ -3,3 +3,6 @@ dist/
 *.log
 .DS_Store
 .orchkit/
+
+# Local npm auth — never commit
+.npmrc
