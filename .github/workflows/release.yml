@@ -21,6 +21,6 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      # Auth via OIDC trusted publishing — configured on npmjs.com under
+      # orchkit → Settings → Trusted Publisher. No stored token needed.
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
