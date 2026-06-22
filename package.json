@@ -5,6 +5,14 @@
   "type": "module",
   "license": "MIT",
   "author": "Nader Hanna",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nadermhanna/orchkit.git"
+  },
+  "homepage": "https://github.com/nadermhanna/orchkit#readme",
+  "bugs": {
+    "url": "https://github.com/nadermhanna/orchkit/issues"
+  },
   "keywords": [
     "agent",
     "agents",
