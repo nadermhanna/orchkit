@@ -15,10 +15,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           # No registry-url: it makes setup-node plant a token-based .npmrc
           # (NODE_AUTH_TOKEN) that overrides OIDC and breaks trusted publishing.
+      # OIDC trusted publishing needs npm >= 11.5.1; the bundled npm is older.
+      - run: npm install -g npm@latest
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
