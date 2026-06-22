@@ -17,7 +17,8 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          registry-url: https://registry.npmjs.org
+          # No registry-url: it makes setup-node plant a token-based .npmrc
+          # (NODE_AUTH_TOKEN) that overrides OIDC and breaks trusted publishing.
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
