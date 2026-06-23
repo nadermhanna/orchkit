@@ -343,6 +343,28 @@ describe("boot", () => {
     expect(h.spawned).toEqual([]); // no twin onto the worktree
     expect((await store.load())["w"]!.runs).toHaveLength(1);
   });
+
+  it("a run whose reprobe is unknown at boot is not orphaned", async () => {
+    const h = makeWorker();
+    // reprobe throws -> "unknown". Unknown is not dead: the run stays open to
+    // be re-probed, never blind-orphaned on a flaky probe at boot.
+    h.alive.value = () => {
+      throw new Error("probe flake");
+    };
+    const seed: Store = {
+      w: {
+        liveness: "alive",
+        itemId: "SQU-9",
+        runs: [{ itemId: "SQU-9", runId: "open-unknown", startedAt: 3, endedAt: null, outcome: null, descriptor: { worker: "w" } }],
+      },
+    };
+    const { orchestrator, store } = build([h], seed);
+
+    await orchestrator.start();
+    await orchestrator.stop();
+
+    expect((await store.load())["w"]!.runs[0]!.outcome).toBeNull(); // left open
+  });
 });
 
 describe("loop safety lives in ingest, not the engine", () => {

@@ -99,16 +99,20 @@ export function createOrchestrator(
     }
   }
 
-  // Liveness via the worker's reprobe, keyed off the durable descriptor.
-  // "unknown" (throw, or a worker no longer configured) is NOT "dead": the
-  // engine leaves the run open and re-probes next tick rather than orphaning.
-  async function isAlive(entry: RegistryEntry): Promise<boolean> {
+  // Liveness via the worker's reprobe, keyed off the durable descriptor. Three
+  // states, kept distinct so the caller never conflates them: only a confirmed
+  // "dead" is orphaned. "unknown" — reprobe threw, or the worker is no longer
+  // configured — leaves the run open to re-probe next tick rather than orphan
+  // blind.
+  async function getLiveness(
+    entry: RegistryEntry,
+  ): Promise<"alive" | "dead" | "unknown"> {
     const worker = workerByName.get(entry.workerName);
-    if (!worker) return true; // recovered run for a gone worker — don't orphan blind
+    if (!worker) return "unknown";
     try {
-      return await worker.reprobe(entry.run.descriptor);
+      return (await worker.reprobe(entry.run.descriptor)) ? "alive" : "dead";
     } catch {
-      return true; // unknown, not dead — re-probe next tick
+      return "unknown";
     }
   }
 
@@ -122,7 +126,7 @@ export function createOrchestrator(
           await fireHook(entry, "onStart");
           continue;
         }
-        if (await isAlive(entry)) continue;
+        if ((await getLiveness(entry)) !== "dead") continue; // alive or unknown: keep waiting
         // dead: peek once more — the verdict wins the race
         const lastLook = await signals.peek();
         const won = lastLook.find((s) => s.runId === entry.run.runId);
@@ -151,8 +155,7 @@ export function createOrchestrator(
         const prompt = worker.generatePrompt(decision.args);
         const handle = await worker.spawn(prompt, { runId });
         // entry lands synchronously on spawn success, before the durable
-        // write — the double-spawn gate. The descriptor rides on the run so it
-        // persists and survives a restart for reprobe.
+        // write — the double-spawn gate.
         const run: Run = {
           itemId: decision.itemId,
           runId,
@@ -214,8 +217,8 @@ export function createOrchestrator(
     }
     await resolveSignals(await signals.peek());
     for (const entry of [...registry.values()]) {
-      if (await isAlive(entry)) {
-        log(`boot: run ${entry.run.runId} (${entry.workerName}) re-adopted (still alive)`);
+      if ((await getLiveness(entry)) !== "dead") {
+        log(`boot: run ${entry.run.runId} (${entry.workerName}) re-adopted (not confirmed dead)`);
         continue; // re-adopted: stays registered, busy, reprobed each tick
       }
       await store.recordOrphaned(entry.workerName, entry.run.runId);
