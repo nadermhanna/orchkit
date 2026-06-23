@@ -7,7 +7,7 @@
 // run `orchkit verdict approve|reject`.
 
 import { defineWorker } from "../src/engine/index.js";
-import { claudeCodeSpawn } from "../src/claude-code/index.js";
+import { claudeCodeSpawn, claudeCodeReprobe } from "../src/claude-code/index.js";
 import { withVerdict } from "../src/cli/index.js";
 
 export interface ClaudeWorkerOptions {
@@ -42,6 +42,10 @@ export function claudeWorker(opts: ClaudeWorkerOptions) {
       signalsDir: opts.signalsDir,
       logsDir: opts.logsDir,
     }),
+
+    // Liveness off the {pid} descriptor — survives an orchestrator restart, so
+    // a reboot re-adopts a still-running agent instead of spawning a twin.
+    reprobe: claudeCodeReprobe,
 
     onStart: async () => {},
     onApprove: async () => {},

@@ -13,6 +13,7 @@ const run = (overrides: Partial<Run> = {}): Run => ({
   startedAt: 500,
   endedAt: null,
   outcome: null,
+  descriptor: { pid: 123 },
   ...overrides,
 });
 

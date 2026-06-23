@@ -37,9 +37,7 @@ export function shellWorker(opts: ShellWorkerOptions) {
     spawn: async (command, { runId }) => {
       const child = spawn(command, { shell: true, detached: true, stdio: "ignore" });
       child.unref();
-      let exited = false;
       child.on("exit", (code) => {
-        exited = true;
         void opts.signals.enqueue({
           kind: "verdict",
           runId,
@@ -47,10 +45,22 @@ export function shellWorker(opts: ShellWorkerOptions) {
         });
       });
       child.on("error", () => {
-        exited = true;
         void opts.signals.enqueue({ kind: "verdict", runId, verdict: "reject" });
       });
-      return { isAlive: async () => !exited };
+      return { descriptor: { pid: child.pid ?? -1 } };
+    },
+
+    // Liveness from the pid alone, so it holds across a restart. kill(pid, 0)
+    // probes without signalling: it throws when the process is gone.
+    reprobe: async (descriptor) => {
+      const pid = (descriptor as { pid?: number }).pid;
+      if (typeof pid !== "number" || pid < 0) return false;
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch (e) {
+        return (e as NodeJS.ErrnoException).code === "EPERM";
+      }
     },
 
     onStart: async () => {},

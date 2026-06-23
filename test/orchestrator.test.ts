@@ -38,11 +38,13 @@ function makeWorker(name = "w"): Harness {
     generatePrompt: (args: { ticket: string }) => `/work ${args.ticket}`,
     spawn: async (prompt: string) => {
       h.spawned.push(prompt);
-      return {
-        isAlive: async () =>
-          typeof h.alive.value === "function" ? h.alive.value() : h.alive.value,
-      };
+      return { descriptor: { worker: name } };
     },
+    // Liveness is read off h.alive (boolean or thunk), keyed by worker name in
+    // the descriptor — same control the old isAlive closure gave the tests,
+    // now routed the way the engine reprobes for real.
+    reprobe: async () =>
+      typeof h.alive.value === "function" ? h.alive.value() : h.alive.value,
     onStart: async () => {
       h.hooks.push("onStart");
     },
@@ -279,25 +281,35 @@ describe("error containment", () => {
 });
 
 describe("boot", () => {
-  it("drains recovered verdicts (hooks fire), then orphans the rest", async () => {
+  it("drains recovered verdicts, re-adopts live runs, orphans only the dead", async () => {
     const h = makeWorker();
     const seed: Store = {
       w: {
         liveness: "alive",
         itemId: "SQU-9",
         runs: [
-          { itemId: "SQU-8", runId: "done-run", startedAt: 1, endedAt: 2, outcome: "approve" },
-          { itemId: "SQU-9", runId: "open-with-verdict", startedAt: 3, endedAt: null, outcome: null },
+          { itemId: "SQU-8", runId: "done-run", startedAt: 1, endedAt: 2, outcome: "approve", descriptor: { worker: "w" } },
+          { itemId: "SQU-9", runId: "open-with-verdict", startedAt: 3, endedAt: null, outcome: null, descriptor: { worker: "w" } },
         ],
       },
+      // y's run is still alive at boot — reprobe says so, so it must be
+      // re-adopted (kept open, no twin), not blind-orphaned.
+      y: {
+        liveness: "alive",
+        itemId: "SQU-6",
+        runs: [{ itemId: "SQU-6", runId: "open-alive", startedAt: 3, endedAt: null, outcome: null, descriptor: { worker: "y" } }],
+      },
+      // x's run died while the engine was down — reprobe says dead, so orphan.
       x: {
         liveness: "alive",
         itemId: "SQU-7",
-        runs: [{ itemId: "SQU-7", runId: "open-no-verdict", startedAt: 3, endedAt: null, outcome: null }],
+        runs: [{ itemId: "SQU-7", runId: "open-no-verdict", startedAt: 3, endedAt: null, outcome: null, descriptor: { worker: "x" } }],
       },
     };
+    const y = makeWorker("y");
     const x = makeWorker("x");
-    const { orchestrator, store, signals } = build([h, x], seed);
+    x.alive.value = false; // x's process is gone
+    const { orchestrator, store, signals } = build([h, y, x], seed);
     await signals.enqueue({ kind: "verdict", runId: "open-with-verdict", verdict: "approve" });
 
     await orchestrator.start();
@@ -306,8 +318,30 @@ describe("boot", () => {
     const after = await store.load();
     expect(after["w"]!.runs.find((r) => r.runId === "open-with-verdict")!.outcome).toBe("approve");
     expect(h.hooks).toContain("onApprove"); // recovered verdict completes normally
-    expect(after["x"]!.runs[0]!.outcome).toBe("orphaned"); // probe didn't survive restart
+    expect(after["y"]!.runs[0]!.outcome).toBeNull(); // still alive — re-adopted, left open
+    expect(after["x"]!.runs[0]!.outcome).toBe("orphaned"); // dead — orphaned
     expect(await signals.peek()).toEqual([]);
+  });
+
+  it("a re-adopted run gates ingest and is not re-spawned", async () => {
+    const h = makeWorker();
+    const seed: Store = {
+      w: {
+        liveness: "alive",
+        itemId: "SQU-9",
+        runs: [{ itemId: "SQU-9", runId: "open-alive", startedAt: 3, endedAt: null, outcome: null, descriptor: { worker: "w" } }],
+      },
+    };
+    // ingest would launch if the station read idle — it must not, because the
+    // live run was re-adopted. This is the duplicate-spawn-on-restart guard.
+    h.decisions.push(launch("SQU-9"));
+    const { orchestrator, store } = build([h], seed);
+
+    await orchestrator.start();
+    await orchestrator.stop();
+
+    expect(h.spawned).toEqual([]); // no twin onto the worktree
+    expect((await store.load())["w"]!.runs).toHaveLength(1);
   });
 });
 
