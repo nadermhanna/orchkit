@@ -30,9 +30,8 @@ export interface Orchestrator {
 
 interface RegistryEntry {
   workerName: string;
-  isAlive: (() => Promise<boolean>) | null; // null only for boot-recovered runs
   recorded: boolean; // recordLaunch landed; false during the double-spawn gap
-  run: Run;
+  run: Run; // carries the descriptor reprobe needs — no closure held here
 }
 
 const projectBag = (worker: AnyWorker): IntegrationBag<any> =>
@@ -100,6 +99,23 @@ export function createOrchestrator(
     }
   }
 
+  // Liveness via the worker's reprobe, keyed off the durable descriptor. Three
+  // states, kept distinct so the caller never conflates them: only a confirmed
+  // "dead" is orphaned. "unknown" — reprobe threw, or the worker is no longer
+  // configured — leaves the run open to re-probe next tick rather than orphan
+  // blind.
+  async function getLiveness(
+    entry: RegistryEntry,
+  ): Promise<"alive" | "dead" | "unknown"> {
+    const worker = workerByName.get(entry.workerName);
+    if (!worker) return "unknown";
+    try {
+      return (await worker.reprobe(entry.run.descriptor)) ? "alive" : "dead";
+    } catch {
+      return "unknown";
+    }
+  }
+
   async function probeAndOrphan(): Promise<void> {
     for (const entry of [...registry.values()]) {
       try {
@@ -110,14 +126,7 @@ export function createOrchestrator(
           await fireHook(entry, "onStart");
           continue;
         }
-        if (!entry.isAlive) continue; // boot-recovered probe-less run; boot orphans these
-        let alive: boolean;
-        try {
-          alive = await entry.isAlive();
-        } catch {
-          continue; // a throwing probe means unknown, not dead — re-probe next tick
-        }
-        if (alive) continue;
+        if ((await getLiveness(entry)) !== "dead") continue; // alive or unknown: keep waiting
         // dead: peek once more — the verdict wins the race
         const lastLook = await signals.peek();
         const won = lastLook.find((s) => s.runId === entry.run.runId);
@@ -153,10 +162,10 @@ export function createOrchestrator(
           startedAt: clock.now(),
           endedAt: null,
           outcome: null,
+          descriptor: handle.descriptor,
         };
         const entry: RegistryEntry = {
           workerName: worker.name,
-          isAlive: handle.isAlive,
           recorded: false,
           run,
         };
@@ -194,17 +203,24 @@ export function createOrchestrator(
   async function start(): Promise<void> {
     // Boot: load, rebuild the registry from open runs, drain the queue so
     // verdicts that landed while the engine was down complete normally, then
-    // orphan whatever remains open — probes do not survive a restart.
+    // reprobe each remaining open run off its persisted descriptor. A run still
+    // alive is re-adopted — kept in the registry, reprobed on later ticks like
+    // any live run — so a restart never spawns a twin onto a worktree a prior
+    // agent is still editing. Only a run reprobe calls dead is orphaned.
     const snapshot = await store.load();
     for (const [workerName, ws] of Object.entries(snapshot)) {
       for (const run of ws.runs) {
         if (run.endedAt === null) {
-          registry.set(run.runId, { workerName, isAlive: null, recorded: true, run });
+          registry.set(run.runId, { workerName, recorded: true, run });
         }
       }
     }
     await resolveSignals(await signals.peek());
     for (const entry of [...registry.values()]) {
+      if ((await getLiveness(entry)) !== "dead") {
+        log(`boot: run ${entry.run.runId} (${entry.workerName}) re-adopted (not confirmed dead)`);
+        continue; // re-adopted: stays registered, busy, reprobed each tick
+      }
       await store.recordOrphaned(entry.workerName, entry.run.runId);
       registry.delete(entry.run.runId);
       log(`boot: run ${entry.run.runId} (${entry.workerName}) orphaned`);

@@ -28,6 +28,7 @@ export type {
   IngestionResult,
   Integration,
   IntegrationBag,
+  JSONValue,
   Liveness,
   ReadonlyStore,
   Run,

@@ -1,6 +1,16 @@
 // The engine's data structures. These are the contract between the
 // orchestrator, the store, the signal queue, and worker authors.
 
+// Anything that survives the store's JSON round-trip. A run's descriptor is
+// typed as this because the engine persists it verbatim and never inspects it.
+export type JSONValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JSONValue[]
+  | { [key: string]: JSONValue };
+
 // ---------------------------------------------------------------------------
 // Integrations & helpers
 // ---------------------------------------------------------------------------
@@ -51,6 +61,10 @@ export interface Run {
   startedAt: number; // ms epoch
   endedAt: number | null; // null while running; an orphan's is detection time
   outcome: RunOutcome;
+  // Opaque reattach token from the worker's spawn. The engine persists it and
+  // hands it back to worker.reprobe to ask "still alive?" — across restarts
+  // too. Its shape ({pid}, {containerId}, ...) is the worker's private concern.
+  descriptor: JSONValue;
 }
 
 // Per-station running status. Orphanhood is a run outcome, not a liveness.
@@ -113,13 +127,20 @@ export interface Worker<
   name: string;
   generatePrompt: (args: Args) => string; // assembles the launch string, pure over args
   // Launch an agent on the prompt. The engine mints the runId; spawn starts
-  // the run and makes that id reachable by it (e.g. ORCHKIT_RUN_ID).
+  // the run and makes that id reachable by it (e.g. ORCHKIT_RUN_ID). Returns a
+  // descriptor — the durable reattach token the engine persists and later
+  // feeds to reprobe.
   spawn: (
     prompt: string,
     ctx: { runId: string },
   ) => Promise<{
-    isAlive: () => Promise<boolean>;
+    descriptor: JSONValue;
   }>;
+  // Liveness for a run, keyed off the descriptor spawn returned. The engine
+  // calls this every tick AND at boot — so it must work from the descriptor
+  // alone, holding no closure over the spawned process. Throwing means
+  // "unknown" (the engine re-probes next tick), distinct from a false "dead".
+  reprobe: (descriptor: JSONValue) => Promise<boolean>;
   integrations: T;
   ingest: Ingest<T, Args>;
   onStart: Hook<T>;
