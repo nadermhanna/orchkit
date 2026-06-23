@@ -1,6 +1,6 @@
 {
   "name": "orchkit",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A tick-driven engine for orchestrating parallel, autonomous agent runs. Each run renders a verdict; work moves station to station.",
   "type": "module",
   "license": "MIT",
