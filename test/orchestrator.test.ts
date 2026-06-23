@@ -292,23 +292,23 @@ describe("boot", () => {
           { itemId: "SQU-9", runId: "open-with-verdict", startedAt: 3, endedAt: null, outcome: null, descriptor: { worker: "w" } },
         ],
       },
-      // y's run is still alive at boot — reprobe says so, so it must be
-      // re-adopted (kept open, no twin), not blind-orphaned.
+      // y and x seed IDENTICAL store rows: one open run with a descriptor.
+      // The only thing that differs is what their reprobe says at boot (set on
+      // the workers below) — that, not the store, decides re-adopt vs. orphan.
       y: {
         liveness: "alive",
         itemId: "SQU-6",
         runs: [{ itemId: "SQU-6", runId: "open-alive", startedAt: 3, endedAt: null, outcome: null, descriptor: { worker: "y" } }],
       },
-      // x's run died while the engine was down — reprobe says dead, so orphan.
       x: {
         liveness: "alive",
         itemId: "SQU-7",
         runs: [{ itemId: "SQU-7", runId: "open-no-verdict", startedAt: 3, endedAt: null, outcome: null, descriptor: { worker: "x" } }],
       },
     };
-    const y = makeWorker("y");
+    const y = makeWorker("y"); // reprobe -> alive (default): run is re-adopted
     const x = makeWorker("x");
-    x.alive.value = false; // x's process is gone
+    x.alive.value = false; // reprobe -> dead: run is orphaned
     const { orchestrator, store, signals } = build([h, y, x], seed);
     await signals.enqueue({ kind: "verdict", runId: "open-with-verdict", verdict: "approve" });
 
