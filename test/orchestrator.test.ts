@@ -13,7 +13,7 @@ import type {
 const clock = { now: () => 42 };
 
 interface Harness {
-  def: AnyWorker;
+  worker: AnyWorker;
   alive: { value: boolean | (() => boolean) };
   spawned: string[]; // prompts, in launch order
   hooks: string[]; // hook firing order
@@ -28,10 +28,10 @@ function makeWorker(name = "worker"): Harness {
     hooks: [],
     decisions: [],
     hookStores: [],
-    def: undefined as unknown as AnyWorker,
+    worker: undefined as unknown as AnyWorker,
   };
   const noopIntegration: Integration = { name: "noop", helpers: {} };
-  harness.def = {
+  harness.worker = {
     name,
     integrations: [noopIntegration],
     ingest: async () => harness.decisions.shift() ?? { launch: false },
@@ -66,7 +66,7 @@ function build(harnesses: Harness[], seed: Store = {}, storeOverride?: StoreServ
   let n = 0;
   const orchestrator = createOrchestrator(
     {
-      workers: harnesses.map((harness) => harness.def),
+      workers: harnesses.map((harness) => harness.worker),
       store,
       signals,
       clock,
@@ -114,8 +114,8 @@ describe("launch", () => {
     const harness = makeWorker();
     harness.decisions.push(launch("SQU-9"), launch("SQU-9"));
     let first = true;
-    const originalSpawn = harness.def.spawn;
-    harness.def.spawn = async (prompt, ctx) => {
+    const originalSpawn = harness.worker.spawn;
+    harness.worker.spawn = async (prompt, ctx) => {
       if (first) {
         first = false;
         throw new Error("boom");
@@ -202,7 +202,7 @@ describe("completion", () => {
   it("a throwing hook changes nothing in the record", async () => {
     const harness = makeWorker();
     harness.decisions.push(launch("SQU-9"));
-    harness.def.onApprove = async () => {
+    harness.worker.onApprove = async () => {
       throw new Error("linear is down");
     };
     const { orchestrator, store, signals } = build([harness]);
@@ -267,7 +267,7 @@ describe("orphaning", () => {
 describe("error containment", () => {
   it("one worker's throwing ingest does not stop another's launch in the same tick", async () => {
     const bad = makeWorker("bad");
-    bad.def.ingest = async () => {
+    bad.worker.ingest = async () => {
       throw new Error("ingest boom");
     };
     const good = makeWorker("good");
